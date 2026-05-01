@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Message from './Message';
-import { Send, Bot } from 'lucide-react';
+import { Send, Bot, Mic, MicOff } from 'lucide-react';
 
 const ChatWindow = () => {
   const [messages, setMessages] = useState([
@@ -8,7 +8,57 @@ const ChatWindow = () => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Initialize Speech Recognition once via useRef to prevent memory leak
+  const recognitionRef = useRef(null);
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-IN'; // Indian English
+      recognitionRef.current = recognition;
+    }
+    return () => {
+      // Cleanup on unmount
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) { /* ignore */ }
+      }
+    };
+  }, []);
+
+  const toggleListen = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition) {
+      alert("Your browser does not support Speech Recognition.");
+      return;
+    }
+    
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+    } else {
+      recognition.start();
+      setIsListening(true);
+      
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(prev => prev ? prev + ' ' + transcript : transcript);
+        setIsListening(false);
+      };
+      
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+      
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+    }
+  }, [isListening]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,14 +106,19 @@ const ChatWindow = () => {
 
   return (
     <div className="glass-panel chat-container">
-      <div className="chat-messages">
+      <div className="chat-messages" aria-live="polite">
         {messages.map((msg, index) => (
           <Message key={index} role={msg.role} content={msg.content} />
         ))}
         {isLoading && (
           <div className="message message-bot">
-            <div className="flex items-center gap-2 text-muted">
-              <Bot size={18} className="spinner" /> Thinking...
+            <div className="message-header">
+              <span className="message-sender">Election Assistant</span>
+            </div>
+            <div className="typing-indicator">
+              <span className="typing-dot"></span>
+              <span className="typing-dot"></span>
+              <span className="typing-dot"></span>
             </div>
           </div>
         )}
@@ -71,19 +126,31 @@ const ChatWindow = () => {
       </div>
       
       <div className="chat-input-area">
+        <button 
+          onClick={toggleListen}
+          className={`voice-btn ${isListening ? 'listening' : ''}`}
+          aria-label={isListening ? "Stop listening" : "Start speaking"}
+          title="Voice Input"
+        >
+          {isListening ? <Mic size={20} /> : <MicOff size={20} />}
+        </button>
+
         <input
           type="text"
-          className="chat-input"
+          className="chat-input has-voice"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyPress}
-          placeholder="Ask about EVMs, Voter ID, Model Code of Conduct..."
+          placeholder={isListening ? "Listening..." : "Ask about EVMs, Voter ID, Model Code of Conduct..."}
           disabled={isLoading}
+          aria-label="Chat input field"
+          id="chat-input"
         />
         <button 
           className="chat-send-btn" 
           onClick={handleSend}
-          disabled={isLoading || !input.trim()}
+          disabled={isLoading || (!input.trim() && !isListening)}
+          aria-label="Send message"
         >
           <Send size={18} />
         </button>

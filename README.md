@@ -88,10 +88,33 @@ graph TD
 
 ## ☁️ Deployment (Google Cloud Run)
 
-The repository includes a `Dockerfile` optimized for Google Cloud Run.
+The repository includes a `Dockerfile` optimized for Google Cloud Run with multi-stage builds, health checks, and graceful shutdown.
 
 1. Ensure the Google Cloud CLI (`gcloud`) is installed and authenticated.
 2. Run the deployment command from the root of the project:
    ```bash
-   gcloud run deploy election-assistant --source . --region us-central1 --allow-unauthenticated --set-env-vars="GEMINI_API_KEY=your_gemini_api_key_here"
+   gcloud run deploy election-assistant \
+     --source . \
+     --region us-central1 \
+     --allow-unauthenticated \
+     --set-env-vars="GEMINI_API_KEY=your_gemini_api_key_here" \
+     --memory=512Mi \
+     --cpu=1 \
+     --min-instances=0 \
+     --max-instances=5
    ```
+3. Verify the deployment:
+   ```bash
+   # Check health endpoint
+   curl https://YOUR_CLOUD_RUN_URL/api/health
+   ```
+
+## 🧪 Running Tests
+
+```bash
+# Backend tests (14 tests)
+cd backend && npm test
+
+# Frontend tests (13 tests)
+cd frontend && npm test
+```

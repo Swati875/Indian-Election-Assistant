@@ -5,3 +5,8 @@ frontend/dist/
 backend/public/
 .git/
 .env
+*.md
+.gitignore
+.dockerignore
+frontend/src/tests/
+backend/tests/

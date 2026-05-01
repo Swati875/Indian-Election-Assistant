@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
-import { Loader2, Trophy, RefreshCw } from 'lucide-react';
+import { Loader2, Trophy, RefreshCw, AlertCircle } from 'lucide-react';
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import app from '../firebaseConfig'; // the initialized firebase app
 
-const QuizGame = () => {
+// We wrap Firestore init in a try/catch so it doesn't break if credentials are fake
+let db = null;
+try {
+  db = getFirestore(app);
+} catch (e) {
+  console.log("Firestore initialization skipped due to mock credentials.");
+}
+
+const QuizGame = ({ flashcardsContext }) => {
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
@@ -23,7 +33,10 @@ const QuizGame = () => {
       const response = await fetch('/api/quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: "Indian Election System, ECI, Model Code of Conduct, Lok Sabha" }),
+        body: JSON.stringify({ 
+          topic: "Indian Election System",
+          flashcardsContext: flashcardsContext && flashcardsContext.length > 0 ? flashcardsContext : null 
+        }),
       });
 
       if (!response.ok) throw new Error('Failed to fetch quiz questions');
@@ -34,6 +47,19 @@ const QuizGame = () => {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveScoreToFirebase = async (finalScore) => {
+    if (!db) return;
+    try {
+      await addDoc(collection(db, "quizScores"), {
+        score: finalScore,
+        timestamp: new Date()
+      });
+      console.log("Score logged to Firestore successfully!");
+    } catch (e) {
+      console.log("Failed to log score to Firestore silently (mock environment):", e.message);
     }
   };
 
@@ -52,6 +78,7 @@ const QuizGame = () => {
       setSelectedOption(null);
     } else {
       setQuizFinished(true);
+      saveScoreToFirebase(score + (selectedOption === questions[currentQuestionIndex].correctAnswer ? 10 : 0));
     }
   };
 
@@ -59,25 +86,31 @@ const QuizGame = () => {
     return (
       <div className="loader-container">
         <Loader2 className="spinner" size={40} color="var(--color-navy)" />
-        <p>Generating dynamic quiz questions...</p>
+        <p>Generating dynamic quiz questions based on your flashcards...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center p-8">
+      <div className="text-center p-8 glass-panel">
+        <AlertCircle className="mx-auto mb-4 text-red-500" size={48} />
         <p className="text-red-500 mb-4">{error}</p>
-        <button className="nav-button" onClick={startQuiz}>Try Again</button>
+        <button className="nav-button active mx-auto" onClick={startQuiz}>Try Again</button>
       </div>
     );
   }
 
   if (questions.length === 0) {
     return (
-      <div className="glass-panel quiz-setup">
+      <div className="glass-panel quiz-setup text-center">
         <Trophy size={48} color="var(--color-saffron)" className="mx-auto mb-4" />
-        <h2 className="app-subtitle mb-6 text-black">Test your knowledge on the Indian Election System!</h2>
+        <h2 className="app-subtitle mb-2 text-black font-bold">Test your knowledge!</h2>
+        {flashcardsContext && flashcardsContext.length > 0 ? (
+          <p className="text-sm text-gray-700 mb-6">This quiz will be based on the flashcards you just studied.</p>
+        ) : (
+          <p className="text-sm text-gray-700 mb-6">Generate flashcards first for a contextual quiz, or take a random quiz.</p>
+        )}
         <button className="nav-button active mx-auto" onClick={startQuiz}>
           Generate Quiz & Start
         </button>
@@ -88,12 +121,12 @@ const QuizGame = () => {
   if (quizFinished) {
     const maxScore = questions.length * 10;
     return (
-      <div className="glass-panel quiz-setup">
+      <div className="glass-panel quiz-setup text-center animate-fade-in">
         <Trophy size={64} color="var(--color-saffron)" className="mx-auto mb-4" />
         <h2 className="app-title mb-2">Quiz Complete!</h2>
         <p className="text-xl mb-6">You scored <strong style={{color: 'var(--color-green)'}}>{score}</strong> out of {maxScore}</p>
         <button className="nav-button active mx-auto" onClick={startQuiz}>
-          <RefreshCw size={18} /> Play Again
+          <RefreshCw size={18} className="inline mr-2" /> Play Again
         </button>
       </div>
     );
@@ -105,10 +138,10 @@ const QuizGame = () => {
   return (
     <div className="quiz-container">
       <div className="quiz-header">
-        <div className="text-muted font-medium">
+        <div className="text-muted font-medium" aria-live="polite">
           Question {currentQuestionIndex + 1} of {questions.length}
         </div>
-        <div className="score-badge">
+        <div className="score-badge" aria-live="polite">
           Score: {score}
         </div>
       </div>
@@ -135,6 +168,7 @@ const QuizGame = () => {
                 className={className}
                 onClick={() => handleOptionSelect(option)}
                 disabled={isAnswered}
+                aria-pressed={selectedOption === option}
               >
                 {option}
               </button>
@@ -143,7 +177,7 @@ const QuizGame = () => {
         </div>
 
         {isAnswered && (
-          <div className={`feedback-area ${selectedOption === currentQ.correctAnswer ? 'correct' : 'incorrect'}`}>
+          <div className={`feedback-area animate-fade-in ${selectedOption === currentQ.correctAnswer ? 'correct' : 'incorrect'}`} aria-live="assertive">
             <p className="font-semibold mb-1">
               {selectedOption === currentQ.correctAnswer ? 'Correct! +10 Points' : 'Incorrect'}
             </p>
@@ -152,7 +186,7 @@ const QuizGame = () => {
         )}
 
         {isAnswered && (
-          <button className="next-btn" onClick={handleNext}>
+          <button className="next-btn mt-4 w-full" onClick={handleNext}>
             {currentQuestionIndex < questions.length - 1 ? 'Next Question' : 'View Results'}
           </button>
         )}

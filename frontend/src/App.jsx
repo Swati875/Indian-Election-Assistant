@@ -2,16 +2,20 @@ import React, { useState } from 'react';
 import ChatWindow from './components/ChatWindow';
 import FlashcardDeck from './components/FlashcardDeck';
 import QuizGame from './components/QuizGame';
-import { flashcardsData } from './data/knowledgeBase';
+import FloatingElements from './components/FloatingElements';
 import { MessageCircle, Layers, Award } from 'lucide-react';
+import './App.css';
 
 function App() {
   const [activeTab, setActiveTab] = useState('chat');
+  const [flashcards, setFlashcards] = useState([]);
 
   return (
-    <>
+    <div className={`app-wrapper theme-${activeTab}`}>
+      {activeTab === 'chat' && <FloatingElements />}
+      
       <header className="app-header">
-        <h1 className="app-title">Indian Election Assistant</h1>
+        <h1 className="app-title">INDIAN ELECTION ASSISTANT</h1>
         <p className="app-subtitle">Learn about the world's largest democracy</p>
       </header>
 
@@ -44,10 +48,10 @@ function App() {
 
       <main className="main-content">
         {activeTab === 'chat' && <ChatWindow />}
-        {activeTab === 'flashcards' && <FlashcardDeck cards={flashcardsData} />}
-        {activeTab === 'quiz' && <QuizGame />}
+        {activeTab === 'flashcards' && <FlashcardDeck cards={flashcards} setCards={setFlashcards} />}
+        {activeTab === 'quiz' && <QuizGame flashcardsContext={flashcards} />}
       </main>
-    </>
+    </div>
   );
 }
 
